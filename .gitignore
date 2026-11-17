@@ -1,0 +1,10 @@
+.terraform/
+.tf-plugin-cache/
+*.tfstate
+*.tfstate.*
+*.tfplan
+plan.txt
+plan.json
+data/
+defaults.yaml
+.env

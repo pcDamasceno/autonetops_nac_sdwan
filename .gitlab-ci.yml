@@ -1,0 +1,107 @@
+# Infrahub artifact -> Cisco NAC (Terraform) -> SD-WAN Manager
+#
+#   fetch     download the `sdwan-nac` artifact rendered by Infrahub
+#   validate  YAML references + terraform validate
+#   plan      terraform plan against the Manager (state in GitLab)
+#   deploy    terraform apply of that exact plan - manual, main only
+#
+# Required CI/CD variables (Settings > CI/CD > Variables):
+#   INFRAHUB_API_TOKEN  masked                 Infrahub API token
+#   SDWAN_URL                                  https://<manager>
+#   SDWAN_USERNAME
+#   SDWAN_PASSWORD      masked
+# Optional overrides: INFRAHUB_ADDRESS, INFRAHUB_BRANCH, SDWAN_INSTANCE, ARTIFACT_NAME
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE =~ /^(push|web|api|trigger|schedule|merge_request_event)$/
+
+stages: [fetch, validate, plan, deploy]
+
+variables:
+  # Jobs run on the runner's `bootcamp` docker network, where Infrahub is reachable by name.
+  INFRAHUB_ADDRESS: http://infrahub-infrahub-server-1:8000
+  INFRAHUB_BRANCH: main
+  SDWAN_INSTANCE: sdwan-manager
+  ARTIFACT_NAME: sdwan-nac
+  SDWAN_INSECURE: "true"
+  TF_IN_AUTOMATION: "true"
+  TF_PLUGIN_CACHE_DIR: ${CI_PROJECT_DIR}/.tf-plugin-cache
+  # GitLab-managed Terraform state, one state per SD-WAN instance
+  TF_STATE_NAME: ${SDWAN_INSTANCE}
+  TF_HTTP_ADDRESS: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}
+  TF_HTTP_LOCK_ADDRESS: ${TF_HTTP_ADDRESS}/lock
+  TF_HTTP_UNLOCK_ADDRESS: ${TF_HTTP_ADDRESS}/lock
+  TF_HTTP_LOCK_METHOD: POST
+  TF_HTTP_UNLOCK_METHOD: DELETE
+  TF_HTTP_USERNAME: gitlab-ci-token
+  TF_HTTP_PASSWORD: ${CI_JOB_TOKEN}
+  TF_HTTP_RETRY_WAIT_MIN: "5"
+
+.terraform:
+  image:
+    name: hashicorp/terraform:1.10
+    entrypoint: [""]
+  cache:
+    key:
+      files: [.terraform.lock.hcl]
+    paths: [.tf-plugin-cache]
+  before_script:
+    - mkdir -p "$TF_PLUGIN_CACHE_DIR"
+    - terraform version
+    - terraform init -input=false
+
+fetch:artifact:
+  stage: fetch
+  image: python:3.12-alpine
+  script:
+    - python scripts/fetch_artifact.py
+  artifacts:
+    paths: [data/]
+    expire_in: 1 week
+
+validate:refs:
+  stage: validate
+  image: python:3.12-alpine
+  needs: [fetch:artifact]
+  script:
+    - pip install --quiet pyyaml
+    - python scripts/check_refs.py data/*.yaml
+
+validate:terraform:
+  extends: .terraform
+  stage: validate
+  needs: [fetch:artifact]
+  before_script:
+    - mkdir -p "$TF_PLUGIN_CACHE_DIR"
+    - terraform init -input=false -backend=false
+  script:
+    - terraform fmt -check -recursive
+    - terraform validate
+
+plan:
+  extends: .terraform
+  stage: plan
+  needs: [fetch:artifact, validate:refs, validate:terraform]
+  resource_group: sdwan-${SDWAN_INSTANCE}
+  script:
+    - terraform plan -input=false -out=plan.tfplan
+    - terraform show -no-color plan.tfplan > plan.txt
+    - terraform show -json plan.tfplan > plan.json
+  artifacts:
+    paths: [plan.tfplan, plan.txt, plan.json, data/]
+    expire_in: 1 week
+
+deploy:
+  extends: .terraform
+  stage: deploy
+  needs: [plan]
+  resource_group: sdwan-${SDWAN_INSTANCE}
+  environment:
+    name: sdwan/${SDWAN_INSTANCE}
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  script:
+    # Applies the reviewed plan only; it fails if the state moved since plan.
+    - terraform apply -input=false plan.tfplan
