@@ -15,7 +15,7 @@ Infrahub (SdwanInstance "sdwan-manager")
 | Job | What it does |
 |---|---|
 | `fetch:artifact` | `scripts/fetch_artifact.py`: finds the `sdwan-nac` artifact for `SDWAN_INSTANCE`, refuses anything not `Ready`, verifies the checksum, writes `data/sdwan.nac.yaml` + `data/.artifact.json` (provenance) |
-| `validate:refs` | `scripts/check_refs.py`: every profile / configuration group referenced is defined (the module would otherwise fail in `plan` with "Invalid index") |
+| `validate:refs` | `scripts/check_refs.py`: refuses an empty model; every profile, configuration group and policy group referenced is defined (the module would otherwise fail in `plan` with "Invalid index") |
 | `validate:terraform` | `terraform fmt -check` + `terraform validate` |
 | `plan` | `terraform plan` against the Manager; `plan.txt` / `plan.json` kept as job artifacts for review |
 | `deploy` | manual, default branch only: applies **that exact plan file** |
@@ -47,6 +47,11 @@ The runner's Docker executor attaches jobs to the `bootcamp` network, which is w
 ```bash
 export INFRAHUB_ADDRESS=http://localhost:8000 INFRAHUB_API_TOKEN=...
 python3 scripts/fetch_artifact.py && python3 scripts/check_refs.py data/*.yaml
-export SDWAN_URL=... SDWAN_USERNAME=... SDWAN_PASSWORD=...
-terraform init -backend=false && terraform plan
+terraform init -backend=false && terraform validate
 ```
+
+`plan` needs the GitLab state, so run it in the pipeline. To plan locally, also set the
+`SDWAN_*` credentials and the `TF_HTTP_*` variables from `.gitlab-ci.yml`
+(`TF_HTTP_USERNAME`/`TF_HTTP_PASSWORD`: your GitLab user and an access token), then run
+`terraform init -reconfigure`. Never plan against an empty local state: it proposes to
+create objects that already exist.

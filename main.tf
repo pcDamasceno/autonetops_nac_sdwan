@@ -11,7 +11,7 @@ terraform {
   required_version = ">= 1.8.0"
 
   # GitLab-managed Terraform state; configured entirely through TF_HTTP_*
-  # variables in .gitlab-ci.yml. For a local run use `-backend=false`.
+  # variables in .gitlab-ci.yml. `-backend=false` only supports `terraform validate`.
   backend "http" {}
 
   required_providers {

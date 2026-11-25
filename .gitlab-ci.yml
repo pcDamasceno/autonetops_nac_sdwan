@@ -66,6 +66,7 @@ validate:refs:
   needs: [fetch:artifact]
   script:
     - pip install --quiet pyyaml
+    - python scripts/test_check_refs.py
     - python scripts/check_refs.py data/*.yaml
 
 validate:terraform:
