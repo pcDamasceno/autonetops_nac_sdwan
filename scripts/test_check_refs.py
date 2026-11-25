@@ -63,6 +63,17 @@ class CheckRefs(unittest.TestCase):
                 model["sites"][0]["routers"][0][ref] = "gone"
                 self.assertEqual(check({"sdwan": model}), 1)
 
+    def test_nulls(self):
+        model = copy.deepcopy(GOOD)
+        model["configuration_groups"][0].update(cli_profile=None, policy_object_profile=None)
+        model["sites"].append({"id": 2, "routers": None})
+        self.assertEqual(check({"sdwan": model}), 0)
+        for key in GOOD:
+            with self.subTest(null=key):
+                model = copy.deepcopy(GOOD)
+                model[key] = None
+                self.assertEqual(check({"sdwan": model}), 1 if key != "topology_groups" else 0)
+
 
 if __name__ == "__main__":
     unittest.main()

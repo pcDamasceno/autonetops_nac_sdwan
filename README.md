@@ -17,7 +17,7 @@ Infrahub (SdwanInstance "sdwan-manager")
 | `fetch:artifact` | `scripts/fetch_artifact.py`: finds the `sdwan-nac` artifact for `SDWAN_INSTANCE`, refuses anything not `Ready`, verifies the checksum, writes `data/sdwan.nac.yaml` + `data/.artifact.json` (provenance) |
 | `validate:refs` | `scripts/check_refs.py`: refuses an empty model; every profile, configuration group and policy group referenced is defined (the module would otherwise fail in `plan` with "Invalid index") |
 | `validate:terraform` | `terraform fmt -check` + `terraform validate` |
-| `plan` | `terraform plan` against the Manager; `plan.txt` / `plan.json` kept as job artifacts for review |
+| `plan` | `terraform plan` against the Manager; `plan.txt` kept as a job artifact for review |
 | `deploy` | manual, default branch only: applies **that exact plan file** |
 
 State is GitLab-managed (Operate > Terraform states), one state per `SDWAN_INSTANCE`.

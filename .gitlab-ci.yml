@@ -58,6 +58,7 @@ fetch:artifact:
     - python scripts/fetch_artifact.py
   artifacts:
     paths: [data/]
+    public: false
     expire_in: 1 week
 
 validate:refs:
@@ -66,7 +67,7 @@ validate:refs:
   needs: [fetch:artifact]
   script:
     - pip install --quiet pyyaml
-    - python scripts/test_check_refs.py
+    - python -m unittest discover -s scripts
     - python scripts/check_refs.py data/*.yaml
 
 validate:terraform:
@@ -88,9 +89,9 @@ plan:
   script:
     - terraform plan -input=false -out=plan.tfplan
     - terraform show -no-color plan.tfplan > plan.txt
-    - terraform show -json plan.tfplan > plan.json
   artifacts:
-    paths: [plan.tfplan, plan.txt, plan.json, data/]
+    paths: [plan.tfplan, plan.txt, data/]
+    public: false # the plan holds sensitive values
     expire_in: 1 week
 
 deploy:

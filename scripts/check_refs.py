@@ -40,11 +40,12 @@ def main(paths: list[str]) -> int:
         with open(p) as fh:
             sdwan.update((yaml.safe_load(fh) or {}).get("sdwan") or {})
 
-    profiles = sdwan.get("feature_profiles", {})
+    profiles = sdwan.get("feature_profiles") or {}
     known = {k: {p["name"] for p in profiles.get(k) or []}
              for refs in PROFILE_REFS.values() for k in refs.values()}
     groups = {kind: {g["name"] for g in sdwan.get(f"{kind}s") or []} for kind in PROFILE_REFS}
-    routers = sum(len(s.get("routers", [])) for s in sdwan.get("sites", []))
+    sites = sdwan.get("sites") or []
+    routers = sum(len(s.get("routers") or []) for s in sites)
     errors: list[str] = []
 
     # An empty model is valid to Terraform: it would plan to destroy everything.
@@ -61,12 +62,12 @@ def main(paths: list[str]) -> int:
 
     for g in sdwan.get("configuration_groups") or []:
         # policy_object_profile is a single object, not a list
-        if "policy_object_profile" in g and "policy_object_profile" not in profiles:
+        if g.get("policy_object_profile") is not None and "policy_object_profile" not in profiles:
             errors.append(f"configuration_group '{g['name']}': policy_object_profile "
                           f"'{g['policy_object_profile']}' but feature_profiles.policy_object_profile is not defined")
 
-    for site in sdwan.get("sites", []):
-        for r in site.get("routers", []):
+    for site in sites:
+        for r in site.get("routers") or []:
             for kind in ("configuration_group", "policy_group"):
                 if r.get(kind) is not None and r[kind] not in groups[kind]:
                     errors.append(f"site {site.get('id')} router {r.get('chassis_id')}: "
